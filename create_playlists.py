@@ -40,9 +40,33 @@ def main(path_filter, commit):
     release_dates = {}
 
     for name in sorted(hq_artists):
-        process_artist(name, commit)
+        process_artist(name, commit, release_dates)
 
-    print(release_dates)
+    for year in release_dates:
+        for month in release_dates[year]:
+            if month == 0:
+                hq_path = f"{HQ_ROOT}/Playlists/{year}.m3u"
+                convert_path = f"{CONVERT_ROOT}/Playlists/{year}.m3u"
+            else:
+                hq_path = f"{HQ_ROOT}/Playlists/{year}-{month}.m3u"
+                convert_path = f"{CONVERT_ROOT}/Playlists/{year}-{month}.m3u"
+
+            hq_contents = "#EXTM3U\n"
+            convert_contents = "#EXTM3U\n"
+            for fn in release_dates[year][month]:
+                hq_contents += "../.." + fn[len(HQ_ROOT):] + "\n"
+                convert_contents += "../.." + ".".join(fn[len(HQ_ROOT):].split(".")[:-1]) + ".mp3\n"
+
+            if not os.path.exists(hq_path) or open(hq_path).read() != hq_contents:
+                if commit:
+                    open(hq_path, "w").write(hq_contents)
+                else:
+                    print(f"Would create/update playlist {hq_path}.")
+            if not os.path.exists(convert_path) or open(convert_path).read() != convert_contents:
+                if commit:
+                    open(convert_path, "w").write(convert_contents)
+                else:
+                    print(f"Would create/update playlist {convert_path}.")
 
 def process_artist(artist_name, commit, release_dates):
     path = "/%s/" % (artist_name, )
@@ -54,10 +78,7 @@ def process_artist(artist_name, commit, release_dates):
 
 def process_album(artist_name, album_name, commit, release_dates):
     path = "/%s/%s/" % (artist_name, album_name)
-    hq_tracks = strip_type(strip_path(HQ_ROOT + path, (glob.glob(HQ_ROOT + path + "*"))))
-
-    if "folder" in hq_tracks:
-        hq_tracks.remove("folder")
+    hq_tracks = [t for t in glob.glob(HQ_ROOT + path + "*") if "/folder." not in t and "@eaDir" not in t and "Thumbs." not in t and not t.endswith(".pdf")]
 
     disc_count = get_disc_count(artist_name, album_name)
     if disc_count is not None and disc_count > 1:
@@ -89,37 +110,41 @@ def process_album(artist_name, album_name, commit, release_dates):
                 except FileExistsError:
                     pass
 
-            if not os.path.exists(hq_playlist) or open(hq_playlist_path).read() != hq_playlist:
+            if not os.path.exists(hq_playlist_path) or open(hq_playlist_path).read() != hq_playlist:
                 if commit:
                     open(hq_playlist_path, "w").write(hq_playlist)
                 else:
-                    print(f"Would create playlist {hq_playlist_path}")
+                    print(f"Would create/update playlist {hq_playlist_path}")
 
-            if not os.path.exists(convert_playlist) or open(convert_playlist_path).read() != convert_playlist:
+            if not os.path.exists(convert_playlist_path) or open(convert_playlist_path).read() != convert_playlist:
                 if commit:
                     open(convert_playlist_path, "w").write(convert_playlist)
                 else:
-                    print(f"Would create playlist {convert_playlist_path}")
+                    print(f"Would create/update playlist {convert_playlist_path}")
 
-    for tracks in hq_tracks:
-        music = mutagen.File(fn)
+    for fn in hq_tracks:
+        music = mutagen.File(f"{fn}")
         if music is None:
             raise ValueError(f"Unable to load file {fn}")
         year, month, day = None, None, None
         if "originaldate" in music and music["originaldate"] is not None:
-            year = int(music["originaldate"].split("-")[0])
-            month = int(music["originaldate"].split("-")[0])
+            dates = music["originaldate"][0].split("-")
+            year = int(dates[0])
+            month = int(dates[1]) if len(dates) > 1 else 0
         elif "date" in music and music["date"] is not None:
-            year = int(music["date"].split("-")[0])
-            month = int(music["date"].split("-")[0])
+            dates = music["date"][0].split("-")
+            year = int(dates[0])
+            month = int(dates[1]) if len(dates) > 1 else 0
 
-        if year is None or month is None:
+        if year is None or month is None or year == 0:
             continue
 
         if year not in release_dates:
             release_dates[year] = {}
+            release_dates[year][0] = []
         if month not in release_dates[year]:
             release_dates[year][month] = []
+        release_dates[year][0].append(fn)
         release_dates[year][month].append(fn)
 
 IGNORE_FILES = {"folder", "cover", "@eaDir", "Thumbs"}
@@ -163,4 +188,4 @@ def get_disc_m3u(artist_name, album_name, disc_number):
     return hq_contents, convert_contents
 
 if __name__ == "__main__":
-    main("" if len(sys.argv) == 1 or sys.argv[1] == "--commit" else sys.argv[1], "--commit" in sys.argv[1])
+    main("" if len(sys.argv) == 1 or sys.argv[1] == "--commit" else sys.argv[1], len(sys.argv) > 1 and "--commit" in sys.argv[1])
