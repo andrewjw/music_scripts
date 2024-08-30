@@ -42,14 +42,17 @@ def main(path_filter, commit):
     for name in sorted(hq_artists):
         process_artist(name, commit, release_dates)
 
+    if path_filter is not None:
+        return
+
     for year in release_dates:
         for month in release_dates[year]:
             if month == 0:
                 hq_path = f"{HQ_ROOT}/Playlists/{year}.m3u"
                 convert_path = f"{CONVERT_ROOT}/Playlists/{year}.m3u"
             else:
-                hq_path = f"{HQ_ROOT}/Playlists/{year}-{month}.m3u"
-                convert_path = f"{CONVERT_ROOT}/Playlists/{year}-{month}.m3u"
+                hq_path = f"{HQ_ROOT}/Playlists/{year}-{month:02}.m3u"
+                convert_path = f"{CONVERT_ROOT}/Playlists/{year}-{month:02}.m3u"
 
             hq_contents = "#EXTM3U\n"
             convert_contents = "#EXTM3U\n"
@@ -78,7 +81,7 @@ def process_artist(artist_name, commit, release_dates):
 
 def process_album(artist_name, album_name, commit, release_dates):
     path = "/%s/%s/" % (artist_name, album_name)
-    hq_tracks = [t for t in glob.glob(HQ_ROOT + path + "*") if "/folder." not in t and "@eaDir" not in t and "Thumbs." not in t and not t.endswith(".pdf")]
+    hq_tracks = [t for t in glob.glob(glob_escape(HQ_ROOT + path) + "*") if "/folder." not in t and "@eaDir" not in t and "Thumbs." not in t and not t.endswith(".pdf")]
 
     disc_count = get_disc_count(artist_name, album_name)
     if disc_count is not None and disc_count > 1:
@@ -151,7 +154,7 @@ IGNORE_FILES = {"folder", "cover", "@eaDir", "Thumbs"}
 
 def get_disc_count(artist_name, album_name):
     path = "%s/%s/%s/*" % (HQ_ROOT , artist_name, album_name)
-    for fn in glob.glob(path):
+    for fn in glob.glob(glob_escape(path)):
         if any(fn.split("/")[-1].startswith(ignore) for ignore in IGNORE_FILES):
             continue
 
@@ -166,7 +169,7 @@ def get_disc_files(artist_name, album_name, disc_number):
     path = "/%s/%s/*" % (artist_name, album_name)
 
     file_list = []
-    for fn in glob.glob(HQ_ROOT + path):
+    for fn in glob.glob(glob_escape(HQ_ROOT + path)):
         if fn.split("/")[-1].startswith("folder") or fn.split("/")[-1].startswith("cover") or fn.split("/")[-1].startswith("@eaDir") or fn.split("/")[-1].startswith("Thumbs.db"):
             continue
         music = mutagen.File(fn)
@@ -188,4 +191,4 @@ def get_disc_m3u(artist_name, album_name, disc_number):
     return hq_contents, convert_contents
 
 if __name__ == "__main__":
-    main("" if len(sys.argv) == 1 or sys.argv[1] == "--commit" else sys.argv[1], len(sys.argv) > 1 and "--commit" in sys.argv[1])
+    main("" if len(sys.argv) == 1 or sys.argv[1] == "--commit" else sys.argv[1], len(sys.argv) > 1 and "--commit" in sys.argv)
